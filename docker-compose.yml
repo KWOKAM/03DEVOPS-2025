@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - rabbitmq
+    environment:
+      - DJANGO_SETTINGS_MODULE=fbrain.settings
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+    networks:
+      - fbrain
+
+  celery:
+    build: ./backend
+    command: celery -A fbrain worker --loglevel=info
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - backend
+      - rabbitmq
+    networks:
+      - fbrain
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - fbrain
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: fbrain
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - fbrain
+
+volumes:
+  pgdata:
+
+networks:
+  fbrain:
+    driver: bridge
+
