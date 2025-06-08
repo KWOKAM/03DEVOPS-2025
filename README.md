@@ -65,8 +65,6 @@ Most endpoints require authentication. To create a user via the browsable API, u
 ## Built With
 
 * [Python](https://www.python.org/) - The language used
-* [Django](https://www.djangoproject.com/) - The web framework and ORM
-* [Django REST](https://www.django-rest-framework.org/) - REST API framework for Django
 * [PostgreSQL](https://www.postgresql.org/) - The database
 * [Docker](https://www.docker.com/) - Containerization engine
 * [Docker Compose](https://docs.docker.com/compose/) - Deployment tool

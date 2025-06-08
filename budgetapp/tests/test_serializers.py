@@ -1,89 +1,83 @@
+
 from django.contrib.auth.models import User
 from django.test import RequestFactory, TestCase
 from rest_framework.test import force_authenticate
 
-from ..models import Budget, BudgetCategory, BudgetCategoryGroup
-from ..serializers import BudgetCategorySerializer
+from budgetapp.models import Budget, BudgetCategory, BudgetCategoryGroup
+from budgetapp.serializers import BudgetCategorySerializer
 
 
-class SerializerTests(TestCase):
+class TestSerializerCategorieBudgetaire(TestCase):
+    """
+    Serie de tests permettant de valider les regles de validation
+    du serializer BudgetCategorySerializer.
+    """
 
     def setUp(self):
-        self.user = User.objects.create(
-            username='test',
-            password='test',
-        )
-        self.user2 = User.objects.create(
-            username='test2',
-            password='test',
-        )
-        budget = Budget.objects.create(
-            month='JAN',
-            year=2000,
-            owner=self.user,
-        )
-        self.group = BudgetCategoryGroup.objects.create(
-            name='Group 1',
-            budget=budget,
-        )
-        self.category = BudgetCategory.objects.create(
-            category='Category 1',
-            group=self.group,
-            limit=100,
-        )
+        self.utilisateur_1 = User.objects.create(username='steve', password='!Rottou1234')
+        self.utilisateur_2 = User.objects.create(username='ronald', password='!Rottou1234')
 
-        self.request_factory = RequestFactory()
+        self.budget = Budget.objects.create(month='JAN', year=2000, owner=self.utilisateur_1)
+        self.groupe = BudgetCategoryGroup.objects.create(name='Groupe Principal', budget=self.budget)
 
-    def test_budget_category_unique(self):
-        request = self.request_factory.post('/budgetcategories/')
-        request.user = self.user
+        self.categorie_existante = BudgetCategory.objects.create(
+            category='Courses',
+            group=self.groupe,
+            limit=100
+        )
+        self.requete_factory = RequestFactory()
+
+    def test_categorie_budget_valide(self):
+        requete = self.requete_factory.post('/budgetcategories/')
+        requete.user = self.utilisateur_1
+
         serializer = BudgetCategorySerializer(
             data={
-                'budget_year': self.group.budget.year,
-                'budget_month': self.group.budget.month,
-                'category': 'Category 2',
-                'group': self.group.name,
-                'limit': 100,
+                'budget_year': self.groupe.budget.year,
+                'budget_month': self.groupe.budget.month,
+                'category': 'Transport',
+                'group': self.groupe.name,
+                'limit': 150,
             },
-            context={
-                'request': request,
-            },
+            context={'request': requete},
         )
+
         self.assertTrue(serializer.is_valid())
 
-    def test_budget_category_not_unique(self):
-        request = self.request_factory.post('/budgetcategories/')
-        request.user = self.user
-        serializer = BudgetCategorySerializer(
-            data={
-                'budget_year': self.group.budget.year,
-                'budget_month': self.group.budget.month,
-                'category': 'Category 1',
-                'group': self.group.name,
-                'limit': 100,
-            },
-            context={
-                'request': request,
-            },
-        )
-        self.assertFalse(serializer.is_valid())
-        self.assertEqual(serializer.errors, {
-            'non_field_errors': ['Category must be unique within this budget.']
-        })
+    def test_categorie_budget_dupliquee(self):
+        requete = self.requete_factory.post('/budgetcategories/')
+        requete.user = self.utilisateur_1
 
-    def test_budget_category_not_unique_cross_user(self):
-        request = self.request_factory.post('/budgetcategories/')
-        request.user = self.user2
         serializer = BudgetCategorySerializer(
             data={
-                'budget_year': self.group.budget.year,
-                'budget_month': self.group.budget.month,
-                'category': 'Category 1',
-                'group': self.group.name,
+                'budget_year': self.groupe.budget.year,
+                'budget_month': self.groupe.budget.month,
+                'category': 'Courses',
+                'group': self.groupe.name,
                 'limit': 100,
             },
-            context={
-                'request': request,
-            },
+            context={'request': requete},
         )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual(
+            serializer.errors,
+            {'non_field_errors': ['Category must be unique within this budget.']}
+        )
+
+    def test_categorie_identique_utilisateur_different(self):
+        requete = self.requete_factory.post('/budgetcategories/')
+        requete.user = self.utilisateur_2  
+
+        serializer = BudgetCategorySerializer(
+            data={
+                'budget_year': self.groupe.budget.year,
+                'budget_month': self.groupe.budget.month,
+                'category': 'Courses', 
+                'group': self.groupe.name,
+                'limit': 120,
+            },
+            context={'request': requete},
+        )
+
         self.assertTrue(serializer.is_valid())

@@ -1,3 +1,5 @@
+
+
 from datetime import datetime
 from decimal import Decimal
 
@@ -6,157 +8,88 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 
 
-class BudgetTests(TestCase):
+class TestBudget(TestCase):
+    """
+    Cette classe teste le fonctionnement des objets Budget :
+    - la methode de copie des categories entre budgets,
+    - la detection du budget precedent dans la chronologie.
+    """
 
     def setUp(self):
-        self.user = User.objects.create(
-            username='test',
-            password='test',
-        )
+        self.utilisateur = User.objects.create(username='test', password='test')
 
-        self.budget1 = models.Budget.objects.create(
-            month='JAN',
-            year=2000,
-            owner=self.user,
+        self.budget_janvier = models.Budget.objects.create(
+            month='JAN', year=2000, owner=self.utilisateur
         )
-        group1 = models.BudgetCategoryGroup.objects.create(
-            name='Budget 1 Group 1',
-            budget=self.budget1,
+        groupe_janvier = models.BudgetCategoryGroup.objects.create(
+            name='Groupe Janvier', budget=self.budget_janvier
         )
-        models.BudgetCategory.objects.create(
-            category='Budget 1 Category 1',
-            group=group1,
-            limit=100,
-        )
-        models.BudgetCategory.objects.create(
-            category='Budget 1 Category 2',
-            group=group1,
-            limit=200,
-        )
+        models.BudgetCategory.objects.create(category='Categorie A', group=groupe_janvier, limit=100)
+        models.BudgetCategory.objects.create(category='Categorie B', group=groupe_janvier, limit=200)
 
-        self.budget2 = models.Budget.objects.create(
-            month='FEB',
-            year=2000,
-            owner=self.user,
+        self.budget_fevrier = models.Budget.objects.create(
+            month='FEB', year=2000, owner=self.utilisateur
         )
-        group2 = models.BudgetCategoryGroup.objects.create(
-            name='Budget 2 Group 1',
-            budget=self.budget2,
+        groupe_fevrier = models.BudgetCategoryGroup.objects.create(
+            name='Groupe Fevrier', budget=self.budget_fevrier
         )
-        models.BudgetCategory.objects.create(
-            category='Budget 2 Category 1',
-            group=group2,
-            limit=100,
-        )
-        models.BudgetCategory.objects.create(
-            category='Budget 2 Category 2',
-            group=group2,
-            limit=200,
-        )
+        models.BudgetCategory.objects.create(category='Categorie C', group=groupe_fevrier, limit=100)
+        models.BudgetCategory.objects.create(category='Categorie D', group=groupe_fevrier, limit=200)
 
-    def test_copy(self):
-        self.budget1.copy_categories(self.budget2)
+    def test_copie_categories(self):
+        self.budget_janvier.copy_categories(self.budget_fevrier)
 
-        # Groups are copied.
-        groups = list(
-            self.budget1.budget_category_groups
-            .order_by('name')
-            .values_list('name', flat=True)
+        groupes = list(
+            self.budget_janvier.budget_category_groups.order_by('name').values_list('name', flat=True)
         )
-        self.assertEqual(groups, ['Budget 2 Group 1'])
+        self.assertEqual(groupes, ['Groupe Fevrier'])
 
-        # Categories are copied.
         categories = list(
-            models.BudgetCategory.objects.filter(
-                group__budget=self.budget1,
-            )
+            models.BudgetCategory.objects.filter(group__budget=self.budget_janvier)
             .order_by('category')
             .values_list('category', flat=True)
         )
-        self.assertEqual(categories, [
-            'Budget 2 Category 1', 'Budget 2 Category 2',
-        ])
+        self.assertEqual(categories, ['Categorie C', 'Categorie D'])
 
-    def test_previous(self):
-        self.assertEqual(self.budget2.previous, self.budget1)
+    def test_budget_precedent(self):
+        self.assertEqual(self.budget_fevrier.previous, self.budget_janvier)
 
-    def test_previous_none(self):
-        self.assertEqual(self.budget1.previous, None)
+    def test_aucun_budget_precedent(self):
+        self.assertIsNone(self.budget_janvier.previous)
 
-    def test_previous_jan(self):
-        jan_99 = models.Budget.objects.create(
-            month='DEC',
-            year=1999,
-            owner=self.user,
+    def test_budget_precedent_annee_prec(self):
+           budget_decembre = models.Budget.objects.create(
+            month='DEC', year=1999, owner=self.utilisateur
         )
-        self.assertEqual(self.budget1.previous, jan_99)
+        self.assertEqual(self.budget_janvier.previous, budget_decembre)
 
 
-class BudgetCategoryTests(TestCase):
+class TestCategorieBudgetaire(TestCase):
 
     def setUp(self):
-        user = User.objects.create(
-            username='test',
-            password='test',
-        )
-        budget = models.Budget.objects.create(
-            month='JAN',
-            year=2000,
-            owner=user,
-        )
-        self.group = models.BudgetCategoryGroup.objects.create(
-            name='Group 1',
-            budget=budget,
-        )
-        self.payee = models.Payee.objects.create(
-            name='Payee 1',
-            owner=user,
-        )
+        self.utilisateur = User.objects.create(username='test', password='test')
+        budget = models.Budget.objects.create(month='JAN', year=2000, owner=self.utilisateur)
+        self.groupe = models.BudgetCategoryGroup.objects.create(name='Groupe Principal', budget=budget)
+        self.destinataire = models.Payee.objects.create(name='Fournisseur A', owner=self.utilisateur)
 
-    def test_spent_no_transactions(self):
-        category = models.BudgetCategory.objects.create(
-            category='Category 1',
-            group=self.group,
-            limit=100,
+    def test_depense_sans_transaction(self):
+         categorie = models.BudgetCategory.objects.create(
+            category='Sans mouvement', group=self.groupe, limit=100
         )
-        self.assertEqual(category.spent, Decimal(0))
+        self.assertEqual(categorie.spent, Decimal(0))
 
-    def test_spent_positive(self):
-        category = models.BudgetCategory.objects.create(
-            category='Category 1',
-            group=self.group,
-            limit=100,
+    def test_depense_positive(self):
+        categorie = models.BudgetCategory.objects.create(
+            category='Depenses courantes', group=self.groupe, limit=100
         )
-        models.Transaction.objects.create(
-            budget_category=category,
-            payee=self.payee,
-            amount=100,
-            date=datetime.now(),
-        )
-        models.Transaction.objects.create(
-            budget_category=category,
-            payee=self.payee,
-            amount=100,
-            date=datetime.now(),
-        )
-        self.assertEqual(category.spent, Decimal(200))
+        models.Transaction.objects.create(budget_category=categorie, payee=self.destinataire, amount=100, date=datetime.now())
+        models.Transaction.objects.create(budget_category=categorie, payee=self.destinataire, amount=100, date=datetime.now())
+        self.assertEqual(categorie.spent, Decimal(200))
 
-    def test_spent_negative(self):
-        category = models.BudgetCategory.objects.create(
-            category='Category 1',
-            group=self.group,
-            limit=100,
+    def test_depense_negative(self):
+        categorie = models.BudgetCategory.objects.create(
+            category='Correction', group=self.groupe, limit=100
         )
-        models.Transaction.objects.create(
-            budget_category=category,
-            payee=self.payee,
-            amount=100,
-            date=datetime.now(),
-        )
-        models.Transaction.objects.create(
-            budget_category=category,
-            payee=self.payee,
-            amount=-200,
-            date=datetime.now(),
-        )
-        self.assertEqual(category.spent, Decimal(-100))
+        models.Transaction.objects.create(budget_category=categorie, payee=self.destinataire, amount=100, date=datetime.now())
+        models.Transaction.objects.create(budget_category=categorie, payee=self.destinataire, amount=-200, date=datetime.now())
+        self.assertEqual(categorie.spent, Decimal(-100))

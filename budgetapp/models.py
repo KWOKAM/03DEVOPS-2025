@@ -1,3 +1,27 @@
+"""
+Ce fichier contient la def des modeles de donnees utilises dans l'app BudgetApp.
+
+L'objectif principal est de permettre la gestion des budgets personnels et familiaux par utilisateur,
+avec la possibilite de :
+- creer des budgets mensuels,
+- organiser les depenses par groupes et categories,
+- suivre les transactions par beneficiaire,
+- calculer les plafonds et les montants depenses automatiquement.
+
+Modeles definis :
+- Budget : represente un budget mensuel appartenant a un utilisateur.
+- GroupeCategorieBudget : groupe de categories de depenses liees a un budget.
+- CategorieBudget : categorie de depense associee a un groupe, avec un plafond et les depenses calculees.
+- Transaction : depense enregistree pour une categorie, associee a un beneficiaire.
+- Beneficiaire : personne ou entite ayant recu un paiement.
+
+Chaque modele inclut des methodes utilitaires pour simplifier la gestion des donnees,
+comme la duplication de categories ou le calcul automatique des depenses.
+
+Toutes les relations sont concues pour respecter l'integrite des donnees et assurer un suivi precis
+des finances personnelles.
+"""
+
 from datetime import datetime
 from decimal import Decimal
 
@@ -7,169 +31,146 @@ from django.db.models.functions import Coalesce
 
 
 class Budget(models.Model):
-    related_name = 'budgets'
-
-    MONTH_CHOICES = (
-        ('JAN', 'January'),
-        ('FEB', 'February'),
-        ('MAR', 'March'),
-        ('APR', 'April'),
-        ('MAY', 'May'),
-        ('JUN', 'June'),
-        ('JUL', 'July'),
-        ('AUG', 'August'),
-        ('SEP', 'September'),
-        ('OCT', 'October'),
-        ('NOV', 'November'),
-        ('DEC', 'December')
+    CHOIX_MOIS = (
+        ('JAN', 'Janvier'),
+        ('FEB', 'Fevrier'),
+        ('MAR', 'Mars'),
+        ('APR', 'Avril'),
+        ('MAY', 'Mai'),
+        ('JUN', 'Juin'),
+        ('JUL', 'Juillet'),
+        ('AUG', 'Aout'),
+        ('SEP', 'Septembre'),
+        ('OCT', 'Octobre'),
+        ('NOV', 'Novembre'),
+        ('DEC', 'Decembre'),
     )
-    MONTH_LOOKUP = {
-        choice[0]: index for index, choice in enumerate(MONTH_CHOICES)
+
+    MOIS_INDEX = {
+        choix[0]: index for index, choix in enumerate(CHOIX_MOIS)
     }
 
-    month = models.CharField(
-        max_length=100,
-        choices=MONTH_CHOICES,
-        default='JAN',
-    )
-    year = models.IntegerField(default=datetime.now().year)
-    owner = models.ForeignKey(
-        'auth.User', related_name=related_name, on_delete=models.CASCADE
+    mois = models.CharField(max_length=100, choices=CHOIX_MOIS, default='JAN')
+    annee = models.IntegerField(default=datetime.now().year)
+    proprietaire = models.ForeignKey(
+        'auth.User', related_name='budgets', on_delete=models.CASCADE
     )
 
-    def copy_categories(self, budget):
-        """
-        Removes all categories from budget and copies ones
-        from the given budget.
-        """
-        # Remove existing groups/categories.
-        self.delete_categories()
+    def copier_categories(self, budget_source):
+        self.supprimer_categories()
+        for groupe in budget_source.groupes_categories.all():
+            categories = groupe.categories.all()
+            groupe.pk = None
+            groupe.budget = self
+            groupe.save()
+            for categorie in categories:
+                categorie.pk = None
+                categorie.groupe = groupe
+                categorie.save()
 
-        # Make copies of groups.
-        for group in budget.budget_category_groups.iterator():
-            categories = group.budget_categories.all()
-            group.pk = None
-            group.budget = self
-            group.save()
-
-            # Make copies of categories.
-            for category in categories:
-                category.pk = None
-                category.group = group
-                category.save()
-
-    def delete_categories(self):
-        self.budget_category_groups.all().delete()
+    def supprimer_categories(self):
+        self.groupes_categories.all().delete()
 
     @property
-    def previous(self):
-        """
-        The previous month's budget, if one exists.
-        """
-        year = self.year
-        month_idx = self.MONTH_LOOKUP[self.month] - 1
-        if month_idx < 0:
-            month_idx = 11
-            year -= 1
-
+    def precedent(self):
+        annee = self.annee
+        index_mois = self.MOIS_INDEX[self.mois] - 1
+        if index_mois < 0:
+            index_mois = 11
+            annee -= 1
         try:
             return Budget.objects.get(
-                owner=self.owner,
-                year=year,
-                month=self.MONTH_CHOICES[month_idx][0],
+                proprietaire=self.proprietaire,
+                annee=annee,
+                mois=self.CHOIX_MOIS[index_mois][0],
             )
         except Budget.DoesNotExist:
             return None
 
     class Meta:
-        unique_together = ('owner', 'month', 'year')
+        unique_together = ('proprietaire', 'mois', 'annee')
+        verbose_name = "Budget"
+        verbose_name_plural = "Budgets"
+        ordering = ['-annee', 'mois']
 
-    def __str__(self):  # pragma: no cover
-        return self.owner.username + \
-               '\'s ' + \
-               str(self.month) + \
-               ' ' + \
-               str(self.year) + \
-               ' Budget'
+    def __str__(self):
+        return f"{self.proprietaire.username} - {self.get_mois_display()} {self.annee}"
 
 
-class BudgetCategoryGroup(models.Model):
-    related_name = 'budget_category_groups'
-    name = models.CharField(max_length=100)
+class GroupeCategorieBudget(models.Model):
+    nom = models.CharField(max_length=100)
     budget = models.ForeignKey(
-        Budget, on_delete=models.CASCADE, related_name=related_name
+        Budget, on_delete=models.CASCADE, related_name='groupes_categories'
     )
 
     @property
-    def owner(self):
-        return self.budget.owner
+    def proprietaire(self):
+        return self.budget.proprietaire
 
     class Meta:
-        unique_together = ('name', 'budget',)
+        unique_together = ('nom', 'budget')
+        verbose_name = "Groupe de categories"
+        verbose_name_plural = "Groupes de categories"
 
-    def __str__(self):  # pragma: no cover
-        return self.name + ' [owner=' + self.budget.owner.username + ']'
+    def __str__(self):
+        return f"{self.nom} [{self.proprietaire.username}]"
 
 
-class BudgetCategory(models.Model):
-    related_name = 'budget_categories'
-    category = models.CharField(max_length=100)
-    group = models.ForeignKey(
-        BudgetCategoryGroup,
+class CategorieBudget(models.Model):
+    nom = models.CharField(max_length=100)
+    groupe = models.ForeignKey(
+        GroupeCategorieBudget,
         on_delete=models.CASCADE,
-        related_name=related_name
+        related_name='categories'
     )
-    limit = models.DecimalField(
-        max_digits=20, decimal_places=2, default=0
-    )
+    plafond = models.DecimalField(max_digits=20, decimal_places=2, default=0)
 
     @property
-    def spent(self):
+    def depense(self):
         return Decimal(
             Transaction.objects
-            .filter(budget_category_id=self.pk)
-            .aggregate(spent=Coalesce(Sum('amount'), Decimal(0)))['spent']
+            .filter(categorie_budget_id=self.pk)
+            .aggregate(depense=Coalesce(Sum('montant'), Decimal(0)))['depense']
         )
 
     @property
-    def owner(self):
-        return self.group.budget.owner
+    def proprietaire(self):
+        return self.groupe.budget.proprietaire
 
-    def __str__(self):  # pragma: no cover
-        return str(self.category) + ' ' + \
-               self.group.budget.month + ' ' + \
-               str(self.group.budget.year) + \
-               ' [owner=' + self.group.budget.owner.username + ']'
+    class Meta:
+        verbose_name = "Categorie"
+        verbose_name_plural = "Categories"
+
+    def __str__(self):
+        return f"{self.nom} ({self.groupe.budget.get_mois_display()} {self.groupe.budget.annee}) [{self.proprietaire.username}]"
 
 
 class Transaction(models.Model):
-    amount = models.DecimalField(
-        max_digits=20, decimal_places=2
-    )
-    payee = models.ForeignKey('Payee', on_delete=models.CASCADE)
-    budget_category = models.ForeignKey(
-        'BudgetCategory', on_delete=models.CASCADE
-    )
+    montant = models.DecimalField(max_digits=20, decimal_places=2)
+    beneficiaire = models.ForeignKey('Beneficiaire', on_delete=models.CASCADE)
+    categorie_budget = models.ForeignKey('CategorieBudget', on_delete=models.CASCADE)
     date = models.DateField()
 
     @property
-    def owner(self):
-        return self.budget_category.group.budget.owner
-
-    def __str__(self):  # pragma: no cover
-        return str(self.amount) + ' ' \
-               + self.payee.name + ' ' \
-               + str(self.budget_category) + ' ' \
-               + str(self.date) + ' ' \
-               + self.budget_category.group.budget.owner.username + ' '
-
-
-class Payee(models.Model):
-    name = models.CharField(max_length=30)
-    owner = models.ForeignKey('auth.User', on_delete=models.CASCADE)
+    def proprietaire(self):
+        return self.categorie_budget.groupe.budget.proprietaire
 
     class Meta:
-        unique_together = ('name', 'owner',)
+        verbose_name = "Transaction"
+        verbose_name_plural = "Transactions"
 
     def __str__(self):
-        return self.name
+        return f"{self.montant} - {self.beneficiaire.nom} - {self.date}"
+
+
+class Beneficiaire(models.Model):
+    nom = models.CharField(max_length=30)
+    proprietaire = models.ForeignKey('auth.User', on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ('nom', 'proprietaire')
+        verbose_name = "Beneficiaire"
+        verbose_name_plural = "Beneficiaires"
+
+    def __str__(self):
+        return self.nom

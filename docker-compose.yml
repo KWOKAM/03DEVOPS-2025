@@ -1,4 +1,3 @@
-version: '3'
 
 services:
   db:
@@ -17,3 +16,11 @@ services:
       - "8000:8000"
     depends_on:
       - db
+  proxy:
+    build:
+      context: ./proxy
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - api

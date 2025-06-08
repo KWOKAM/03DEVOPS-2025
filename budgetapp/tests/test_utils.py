@@ -1,54 +1,54 @@
-from budgetapp import models
+
 from django.contrib.auth.models import User
 from django.test import TestCase
+from budgetapp import models
+from budgetapp.utils.permissions import is_owner_or_admin
 
-from ..utils.permissions import is_owner_or_admin
 
-
-class PermissionsTests(TestCase):
+class TestPermissionsUtilisateurs(TestCase):
+    """
+    Ce fichier teste la fonction utilitaire 'is_owner_or_admin' utilisee pour
+    controler les autorisations d'acces aux objets Budget et Groupes associes.
+    """
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
 
-        cls.user1 = User.objects.create(
-            username='user1',
-            password='user1',
+        cls.utilisateur_proprio = User.objects.create(
+            username='steve', password='!Rottou1234'
         )
-        cls.user2 = User.objects.create(
-            username='user2',
-            password='user2',
+        cls.utilisateur_autre = User.objects.create(
+            username='visiteur', password='!Rottou1234'
         )
-        cls.staff_user = User.objects.create(
-            username='staff',
-            password='staff',
-            is_staff=True,
+        cls.utilisateur_admin = User.objects.create(
+            username='admin', password='adminpass', is_staff=True
         )
 
-        cls.budget1 = models.Budget.objects.create(
-            month='JAN',
-            year=2000,
-            owner=cls.user1,
-        )
-        cls.group1 = models.BudgetCategoryGroup.objects.create(
-            name='Group 1',
-            budget=cls.budget1,
+        cls.budget = models.Budget.objects.create(
+            month='JAN', year=2025, owner=cls.utilisateur_proprio
         )
 
-    def test_is_owner_or_admin_is_owner(self):
-        # Direct relationship to owner.
-        self.assertTrue(is_owner_or_admin(self.user1, self.budget1))
-        # Nested relationship to owner.
-        self.assertTrue(is_owner_or_admin(self.user1, self.group1))
+        cls.groupe = models.BudgetCategoryGroup.objects.create(
+            name='Groupe Depenses Fixes', budget=cls.budget
+        )
 
-    def test_is_owner_or_admin_not_owner(self):
-        # Direct relationship to owner.
-        self.assertFalse(is_owner_or_admin(self.user2, self.budget1))
-        # Nested relationship to owner.
-        self.assertFalse(is_owner_or_admin(self.user2, self.group1))
+    def test_est_proprietaire_direct(self):
+        self.assertTrue(is_owner_or_admin(self.utilisateur_proprio, self.budget))
 
-    def test_is_owner_or_admin_is_staff(self):
-        self.assertTrue(is_owner_or_admin(self.staff_user, self.budget1))
+    def test_est_proprietaire_indirect(self):
+        self.assertTrue(is_owner_or_admin(self.utilisateur_proprio, self.groupe))
 
-    def test_is_owner_or_admin_no_owner_attribute(self):
-        self.assertTrue(is_owner_or_admin(self.staff_user, object()))
+    def test_n_est_pas_proprietaire_direct(self):
+        self.assertFalse(is_owner_or_admin(self.utilisateur_autre, self.budget))
+
+    def test_n_est_pas_proprietaire_indirect(self):
+        self.assertFalse(is_owner_or_admin(self.utilisateur_autre, self.groupe))
+
+    def test_est_admin_acces_ok(self):
+        self.assertTrue(is_owner_or_admin(self.utilisateur_admin, self.budget))
+        self.assertTrue(is_owner_or_admin(self.utilisateur_admin, self.groupe))
+
+    def test_objet_sans_proprietaire(self):
+        objet_sans_owner = object()
+        self.assertTrue(is_owner_or_admin(self.utilisateur_admin, objet_sans_owner))

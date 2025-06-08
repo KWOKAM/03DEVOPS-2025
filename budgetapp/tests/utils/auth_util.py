@@ -3,186 +3,122 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 from rest_framework import status
 
-# Model Names
-BUDGET_NAME = 'budget'
-CATEGORY_NAME = 'budgetcategory'
-CATEGORYBUDGETGROUP_NAME = 'budgetcategorygroup'
-TRANSACTION_NAME = 'transaction'
-USER_NAME = 'user'
+BUDGET = 'budget'
+CATEGORIE_BUDGETAIRE = 'categoriebudget'
+GROUPE_CATEGORIES = 'groupecategoriebudget'
+TRANSACTION = 'transaction'
+UTILISATEUR = 'user'
 
-# Test Data
-post_data = {
-    BUDGET_NAME: {
+donnees_post = {
+    BUDGET: {
         'month': 'JAN',
-        'year': 2017,
+        'year': 2025,
     },
-    CATEGORY_NAME: {
+    CATEGORIE_BUDGETAIRE: {
         'budget_month': 'JAN',
-        'budget_year': 2017,
+        'budget_year': 2025,
         'group': 'test',
-        'category': 'Groceries',
+        'category': 'Courses',
     },
-    CATEGORYBUDGETGROUP_NAME: {
+    GROUPE_CATEGORIES: {
         'name': 'test',
         'budget': '',
     },
-    USER_NAME: {
+    UTILISATEUR: {
         'username': 'test',
         'email': 'test@test.com',
         'password': 'test',
     }
 }
-test_users = [
+
+utilisateurs_test = [
     {'username': 'test0', 'email': 'test0@test.com', 'password': 'test0'},
     {'username': 'test1', 'email': 'test1@test.com', 'password': 'test1'},
 ]
 
-
-# ---------- LIST ------------- #
-
-
-def list_test(client, model_name, auth=False, test_user_index=0):
-    url = get_url(model_name, 'list')
+def test_lister(client, nom_modele, auth=False, index_utilisateur=0):
+    url = obtenir_url(nom_modele, 'list')
     if auth:
-        login_test_user(client, test_user_index)
+        connexion_utilisateur_test(client, index_utilisateur)
     response = client.get(url)
     client.logout()
     return response
 
-
-# ----------- POST ------------ #
-
-
-def post_test(client, model_name, auth=False, test_user_index=0):
-    url = get_url(model_name, 'list')
+def test_creation(client, nom_modele, auth=False, index_utilisateur=0):
+    url = obtenir_url(nom_modele, 'list')
     if auth:
-        login_test_user(client, test_user_index)
-    response = client.post(url, post_data[model_name])
+        connexion_utilisateur_test(client, index_utilisateur)
+    response = client.post(url, donnees_post[nom_modele])
     client.logout()
     return response
 
-
-# ------------ DETAIL ------------ #
-
-
-def detail_test(client, model_name, auth=False, test_user_index=0):
-    response = create_test_model(client, model_name, test_user_index)
+def test_detail(client, nom_modele, auth=False, index_utilisateur=0):
+    response = creer_modele_test(client, nom_modele, index_utilisateur)
     if auth:
-        login_test_user(client, test_user_index)
+        connexion_utilisateur_test(client, index_utilisateur)
     response = client.get(response.data['url'])
     client.logout()
     return response
 
+def test_detail_cross_user(client, nom_modele):
 
-def detail_cross_user_test(client, model_name):
-    """
-    Creates a model with one test user, then tries to retrieve it with another
-    :param client:
-    :param model_name:
-    :return: The response
-    """
-    response = create_test_model(client, model_name, 0)
-    login_test_user(client, 1)
+    response = creer_modele_test(client, nom_modele, 0)
+    connexion_utilisateur_test(client, 1)
     response = client.get(response.data['url'])
     client.logout()
     return response
 
-
-# ------------- PUT --------------- #
-
-
-def put_test(client, model_name, auth=False, test_user_index=0):
-    response = create_test_model(client, model_name, test_user_index)
+def test_modification(client, nom_modele, auth=False, index_utilisateur=0):
+    response = creer_modele_test(client, nom_modele, index_utilisateur)
     if auth:
-        login_test_user(client, test_user_index)
-    response = client.put(response.data['url'], post_data[model_name])
+        connexion_utilisateur_test(client, index_utilisateur)
+    response = client.put(response.data['url'], donnees_post[nom_modele])
     client.logout()
     return response
 
-
-def put_cross_user_test(client, model_name):
-    """
-    Creates a model with one test user, then tries to update it with another
-    :param client:
-    :param model_name:
-    :return: The response
-    """
-    response = create_test_model(client, model_name, 0)
-    login_test_user(client, 1)
-    response = client.put(response.data['url'], post_data[model_name])
+def test_modif_cross_user(client, nom_modele):
+    response = creer_modele_test(client, nom_modele, 0)
+    connexion_utilisateur_test(client, 1)
+    response = client.put(response.data['url'], donnees_post[nom_modele])
     client.logout()
     return response
 
-
-# ------------ DELETE --------------- #
-
-
-def delete_test(client, model_name, auth=False, test_user_index=0):
-    response = create_test_model(client, model_name, test_user_index)
+def test_suppression(client, nom_modele, auth=False, index_utilisateur=0):
+    response = creer_modele_test(client, nom_modele, index_utilisateur)
     if auth:
-        login_test_user(client, test_user_index)
+        connexion_utilisateur_test(client, index_utilisateur)
     response = client.delete(response.data['url'])
     client.logout()
     return response
 
-
-def delete_cross_user_test(client, model_name):
-    response = create_test_model(client, model_name, 0)
-    login_test_user(client, 1)
+def test_suppression_cross_user(client, nom_modele):
+    response = creer_modele_test(client, nom_modele, 0)
+    connexion_utilisateur_test(client, 1)
     response = client.delete(response.data['url'])
     client.logout()
     return response
 
+def creer_utilisateurs_test():
+    for utilisateur in utilisateurs_test:
+        User.objects.create_user(username=utilisateur['username'],
+                                 email=utilisateur['email'],
+                                 password=utilisateur['password'])
 
-# ------- Helper Functions ------- #
+def connexion_utilisateur_test(client, index=0):
+    utilisateur = User.objects.get(username=utilisateurs_test[index]['username'])
+    if utilisateur is None:
+        raise Exception('Utilisateur de test introuvable')
+    client.force_login(utilisateur)
 
-
-def create_test_users():
-    """
-    Creates test users from test_users data
-    """
-    for test_user in test_users:
-        User.objects.create_user(username=test_user['username'],
-                                 email=test_user['email'],
-                                 password=test_user['password'])
-
-
-def login_test_user(client, index=0):
-    """
-    Logs in selected test user
-    :param client:
-    :param index: The index of the desired user in test_users
-    :return:
-    """
-    user = User.objects.get(username=test_users[index]['username'])
-    if user is None:
-        raise Exception('Test user does not exist')
-    client.force_login(user)
-
-
-def create_test_model(client, model_name, test_user_index=0):
-    """
-    Logs in as test user (create_test_users must be called first) and
-    calls the test model function corresponding to the given name
-    :param client:
-    :param model_name: Name of the model to be created
-    :param test_user_index: Index of the user to create the object with
-    :return: The post response
-    """
-    login_test_user(client, test_user_index)
-
-    url = get_url(model_name, 'list')
-    test_data = post_data[model_name]
-
-    response = client.post(url, test_data)
+def creer_modele_test(client, nom_modele, index_utilisateur=0):
+    connexion_utilisateur_test(client, index_utilisateur)
+    url = obtenir_url(nom_modele, 'list')
+    donnees = donnees_post[nom_modele]
+    response = client.post(url, donnees)
     if response.status_code != status.HTTP_201_CREATED:
-        raise Exception('Test ' + model_name + ' could not be created: ' +
-                        str(response.data))
-
+        raise Exception(f"Echec de creation de {nom_modele} : {response.data}")
     client.logout()
-
     return response
 
-
-def get_url(model_name, suffix, args=[]):
-    return reverse('{}:{}-{}'.format(app_name, model_name, suffix), args=args)
+def obtenir_url(nom_modele, suffixe, args=[]):
+    return reverse(f'{app_name}:{nom_modele}-{suffixe}', args=args)
