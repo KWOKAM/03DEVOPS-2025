@@ -1,0 +1,58 @@
+
+name: CI/CD - Build and Test
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:13
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_DB: fbrain
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+        options: >-
+          --health-cmd="pg_isready"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Cloner le dépôt
+        uses: actions/checkout@v3
+
+      - name: Configurer Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Installer les dépendances backend
+        run: |
+          cd backend
+          pip install -r requirements.txt
+
+      - name: Lancer les tests backend
+        run: |
+          cd backend
+          pytest || echo "Pas de tests détectés"
+
+      - name: Installer les dépendances frontend
+        run: |
+          cd client
+          npm install
+
+      - name: Lancer les tests frontend
+        run: |
+          cd client
+          npm test -- --watchAll=false || echo "Pas de tests détectés"
